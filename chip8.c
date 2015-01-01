@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <GL/glut.h>
 
 unsigned short opcode;
 
@@ -314,9 +315,9 @@ void initialize() {
         I = 0;
         SP = 0;
 
-        reg = calloc(16 * sizeof(char));
-        mem = calloc(4096 * sizeof(char));
-        stack = calloc(16 * sizeof(short));
+        reg = calloc(16 ,sizeof(char));
+        mem = calloc(4096 ,sizeof(char));
+        stack = calloc(16 ,sizeof(short));
 
         //Set up font
         for (int i = 0; i < 80; i++) {
@@ -359,8 +360,33 @@ void runCycle() {
         unsigned short i = opcode & 0xFFF;
         PC += 2;
         (*fp[opcode]) (i);
+        if (sound_timer > 0) {
+                if (sound_timer == 1) {
+                        //TODO make a sound?
+                }
+                --sound_timer;
+        }
+        if (delay_timer > 0)
+                --delay_timer;
 }
 
 void setInput() {
 
+}
+
+int main(int argc, char **argv) {
+        initGraphics();
+        initInput();
+
+        initialize();
+        loadGame("pong");
+
+        while(true) {
+                chip.runCycle();
+                if(chip.drawFlag) {
+                        drawScreen();
+                }
+                chip.setInput();
+        }
+        return 0;
 }

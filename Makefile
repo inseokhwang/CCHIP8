@@ -12,3 +12,5 @@ Chip8:		chip8.o
 
 chip8.o:	chip8.c
 		$(CC) $(CFLAGS) chip8.c
+
+clean:		rm *.o

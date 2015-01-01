@@ -48,6 +48,7 @@ unsigned char getX(unsigned short i);
 unsigned char getY(unsigned short i);
 unsigned char getNN(unsigned short i);
 
+
 /*
  *
  *     Functions for handling Opcodes and its own helper functions
@@ -61,7 +62,11 @@ void fp0 (unsigned short i) {
         switch (i) {
                 // Clear the screen TODO
                 case 0x0E0:
-                        // clearScreen();
+                        for (int x = 0; x < 64; ++x) {
+                                for (int y = 0; y < 32; ++y) {
+                                        gfx[x + 64*y] = 0;
+                                }
+                        }
                         break;
                 // Return from subroutine
                 case 0x0EE:
@@ -308,8 +313,19 @@ unsigned char getNN (unsigned short i) {
  *
  */
 
+ void initGraphics() {
+
+ }
+
+ void initInput() {
+        
+ }
+
 //Initializes registers and memory
 void initialize() {
+        initGraphics();
+        initInput();
+
         PC = 0x200;
         opcode = 0;
         I = 0;
@@ -375,13 +391,12 @@ void setInput() {
 }
 
 int main(int argc, char **argv) {
-        initGraphics();
-        initInput();
+
 
         initialize();
         loadGame("pong");
 
-        while(true) {
+        while(1) {
                 chip.runCycle();
                 if(chip.drawFlag) {
                         drawScreen();

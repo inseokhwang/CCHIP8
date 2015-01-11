@@ -5,10 +5,9 @@
 
 CC = gcc
 CFLAGS = -std=c99 -Werror
+EXECUTABLE = CCHIP-8
 
-default:	Chip8
-
-Chip8:		chip8.o
+default:	chip8.o
 
 chip8.o:	chip8.c
 		$(CC) $(CFLAGS) chip8.c

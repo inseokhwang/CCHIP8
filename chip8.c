@@ -3,6 +3,11 @@
 #include <time.h>
 #include <GL/glut.h>
 
+#define debug printf("debug\n");
+
+FILE *rom;
+unsigned short maxRomSize = 3584;
+
 unsigned short opcode;
 
 unsigned char *reg;
@@ -26,22 +31,22 @@ void (*fp[16]) (unsigned short i);
 
 unsigned char chip8_fontset[80] =
 { 
-  0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
-  0x20, 0x60, 0x20, 0x20, 0x70, // 1
-  0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
-  0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
-  0x90, 0x90, 0xF0, 0x10, 0x10, // 4
-  0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
-  0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
-  0xF0, 0x10, 0x20, 0x40, 0x40, // 7
-  0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
-  0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
-  0xF0, 0x90, 0xF0, 0x90, 0x90, // A
-  0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
-  0xF0, 0x80, 0x80, 0x80, 0xF0, // C
-  0xE0, 0x90, 0x90, 0x90, 0xE0, // D
-  0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-  0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+        0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+        0x20, 0x60, 0x20, 0x20, 0x70, // 1
+        0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+        0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+        0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+        0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+        0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+        0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+        0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+        0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+        0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+        0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+        0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+        0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+        0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+        0xF0, 0x80, 0xF0, 0x80, 0x80  // F
 };
 
 unsigned char getX(unsigned short i);
@@ -70,11 +75,13 @@ void fp0 (unsigned short i) {
                         break;
                 // Return from subroutine
                 case 0x0EE:
-                        PC = stack[SP];
                         SP--;
+                        PC = stack[SP];
                         break;
                 // TODO Calls RCA1802 program at address NNN
                 default: 
+                        printf("Unknown opcode: 0%d\n", i);
+                        exit(0);
                         break;
         }
 }
@@ -144,7 +151,6 @@ void fp8 (unsigned short i) {
                         reg[X] = reg[X] ^ reg[Y];
                         break;
                 case 0x4:
-                        //TODO
                         if (((short) (reg[X] + reg[Y])) > 255)
                                 reg[0xF] = 1;
                         else 
@@ -152,14 +158,22 @@ void fp8 (unsigned short i) {
                         reg[X] += reg[Y];
                         break;
                 case 0x5:
-                        //TODO
+                        if (((short) (reg[X] - reg[Y])) < 0)
+                                reg[0xF] = 0;
+                        else
+                                reg[0xF] = 1;
+                        reg[X] -= reg[Y];
                         break;
                 case 0x6:
                         reg[0xF] = reg[X] & 0x1;
                         reg[X] = reg[X] >> 1;
                         break;
                 case 0x7:
-                        //TODO
+                        if (((short) (reg[Y] - reg[X])) < 0)
+                                reg[0xF] = 0;
+                        else
+                                reg[0xF] = 1;
+                        reg[X] = reg[Y] - reg[X];
                         break;
                 case 0xE:
                         reg[0xF] = (reg[X] & 0xA0) >> 7;
@@ -292,7 +306,7 @@ void fpF (unsigned short i) {
 }
 
 unsigned char getX (unsigned short i) {
-        unsigned char X = (i & 0xF00) >> 8;     
+        unsigned char X = (i & 0xF00) >> 8;
         return X;
 }
 
@@ -318,7 +332,7 @@ unsigned char getNN (unsigned short i) {
  }
 
  void initInput() {
-        
+
  }
 
 //Initializes registers and memory
@@ -331,15 +345,18 @@ void initialize() {
         I = 0;
         SP = 0;
 
-        reg = calloc(16 ,sizeof(char));
-        mem = calloc(4096 ,sizeof(char));
-        stack = calloc(16 ,sizeof(short));
+        reg = calloc(16 , sizeof(char));
+        mem = calloc(4096 , sizeof(char));
+        stack = calloc(16 , sizeof(short));
+        gfx = calloc(64 * 32, sizeof(char));
+        key = calloc(16 , sizeof(char));
 
         //Set up font
         for (int i = 0; i < 80; i++) {
                 mem[i] = chip8_fontset[i];
         }
 
+        drawFlag = 1;
         delay_timer = 0;
         sound_timer = 0;
 
@@ -366,14 +383,38 @@ void initialize() {
 
 }
 
-void loadGame(char* gameName) {
+void loadGame(char* gameDirectory) {
+        rom = fopen(gameDirectory, "rb");
+        if (rom == 0) {
+                printf("Error opening file");
+                exit(0);
+        } 
+        fseek(rom, 0, SEEK_END);
+        long size = ftell(rom);
+        rewind(rom);
+        unsigned char *buffer = malloc(size * sizeof(char));
+        if (size != fread(buffer, 1, size, rom)) {
+                printf("Error reading file");
+                exit(0);
+        }
+        for(int i = 0; i < size; ++i) {
+                mem[PC + i] = buffer[i];
+        }
+        
+        fclose(rom);
+        free(buffer);
+}
 
+void printHelp() {
+        printf("\nUsage: chip8 gamefile");
 }
 
 // Fetch, Decode, Execute Opcode and Update timer
 void runCycle() {
         opcode = mem[PC] << 8 | mem[PC + 1];
+        printf("MEM[0x%X] = 0x%2X\n", PC, opcode);
         unsigned short i = opcode & 0xFFF;
+        opcode = opcode >> 12;
         PC += 2;
         (*fp[opcode]) (i);
         if (sound_timer > 0) {
@@ -386,22 +427,28 @@ void runCycle() {
                 --delay_timer;
 }
 
+void drawScreen() {
+
+}
+
 void setInput() {
 
 }
 
-int main(int argc, char **argv) {
-
-
+int main(int argc, char *argv[]) {
         initialize();
-        loadGame("pong");
+        if (argc > 0) {
+                loadGame(*(argv + 1));
+        } else {
+                printHelp();
+        }
 
         while(1) {
-                chip.runCycle();
-                if(chip.drawFlag) {
+                runCycle();
+                if(drawFlag) {
                         drawScreen();
                 }
-                chip.setInput();
+                setInput();
         }
         return 0;
 }

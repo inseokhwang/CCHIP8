@@ -16,7 +16,6 @@
  *      Variables for CPU
  */
 FILE *rom;
-unsigned short maxRomSize = 3584;
 
 unsigned short opcode;
 
@@ -64,17 +63,6 @@ unsigned char getY(unsigned short i);
 unsigned char getNN(unsigned short i);
 
 /*
- *      Variables for GUI
- */
-int display_width = SCREEN_WIDTH * MODIFIER;
-int display_height = SCREEN_HEIGHT * MODIFIER;
-
-typedef unsigned char u8;
-u8 screenData [SCREEN_HEIGHT] [SCREEN_WIDTH] [3];
-
-void reshape_window(GLsizei w, GLsizei h);
-
-/*
  *
  *     Functions for handling Opcodes and its own helper functions
  *
@@ -96,10 +84,11 @@ void fp0 (unsigned short i) {
                         break;
                 // Return from subroutine
                 case 0x0EE:
+                        PC -= 2;
                         SP--;
                         PC = stack[SP];
                         break;
-                // TODO Calls RCA1802 program at address NNN
+                // Calls RCA1802 program at address NNN - deprecated
                 default: 
                         printf("Unknown opcode: 0%d\n", i);
                         exit(0);
@@ -186,8 +175,8 @@ void fp8 (unsigned short i) {
                         reg[X] -= reg[Y];
                         break;
                 case 0x6:
-                        reg[0xF] = reg[X] & 0x1;
-                        reg[X] = reg[X] >> 1;
+                        reg[0xF] = reg[Y] & 0x1;
+                        reg[X] = reg[Y] >> 1;
                         break;
                 case 0x7:
                         if (((short) (reg[Y] - reg[X])) < 0)
@@ -197,8 +186,8 @@ void fp8 (unsigned short i) {
                         reg[X] = reg[Y] - reg[X];
                         break;
                 case 0xE:
-                        reg[0xF] = (reg[X] & 0xA0) >> 7;
-                        reg[X] = reg[X] << 1;
+                        reg[0xF] = (reg[Y] & 0xA0) >> 7;
+                        reg[X] = reg[Y] << 1;
         }
 }
 
@@ -217,13 +206,14 @@ void fpA (unsigned short i) {
 
 // BNNN - Jumpts to NNN + Reg[0] - WARNING might add into 0 I think, should use mod here?
 void fpB (unsigned short i) {
-        PC = i + reg[0];
+        PC = i + reg[0x0];
+        PC -= 2;
 }
 
 // CXNN - Sets Reg[X] as a random number between 0 and NN
 void fpC (unsigned short i) {
         unsigned char X = getX(i);
-        reg[X] = rand() % (getNN(i));
+        reg[X] = (rand() % 0xFF) & getNN(i);
 }
 
 // DXYN - Draw a sprite at (Reg[X], Reg[Y]) that is N bytes long and is located at the Index register
@@ -238,12 +228,16 @@ void fpD (unsigned short i) {
         for (char y = 0; y < N; ++y) {
                 pixel = mem[I + y];
                 for (char x = 0; x < 8; ++x) {
+                        if (X + x == 64)
+                                X -= x;
+                        if (Y + y == 32)
+                                Y -= y;
                         int pixelIndex = X + x + 64*(Y + y);
                         if (pixel & (0x80 >> x)) {
                                 if (gfx[pixelIndex]) {
                                         reg[0xF] = 1;
                                 }
-                                gfx[pixelIndex] ^= pixel & 0xF;
+                                gfx[pixelIndex] ^= 1;
                         }
                 }
         }
@@ -284,8 +278,8 @@ void fpF (unsigned short i) {
                 // Wait for a keypress
                 case 0x0A:
                         pressed = 0;
-                        for (int i = 0; i < 16; ++i) {
-                                pressed += key[i];
+                        for (int z = 0; z < 16; ++z) {
+                                pressed += key[z];
                         }
                         if (pressed)
                                 PC -= 2;
@@ -299,6 +293,10 @@ void fpF (unsigned short i) {
                         break;
                 // Set I = I + reg[X]
                 case 0x1E:
+                        if (((short) I + reg[X]) > 255)
+                                reg[0xF] = 1;
+                        else
+                                reg[0xF] = 0;
                         I += reg[X];
                         break;
                 // Set I to correct font specified by reg[X] 
@@ -313,14 +311,16 @@ void fpF (unsigned short i) {
                         mem[I + 2] = X % 10;
                         break;
                 case 0x55:
-                        for (int i = 0; i <= X; i++) {
-                                mem[I + i] = reg[i];
+                        for (int z = 0; z <= X; z++) {
+                                mem[I + z] = reg[z];
                         }
+                        I = I + X + 1;
                         break;
                 case 0x65:
-                        for (int i = 0; i <= X; i++) {
-                                reg[i] = mem[I + i];
+                        for (int z = 0; i <= X; i++) {
+                                reg[z] = mem[I + z];
                         }
+                        I = I + X + 1;
                         break;
         }
 
@@ -332,8 +332,7 @@ unsigned char getX (unsigned short i) {
 }
 
 unsigned char getY (unsigned short i) {
-        unsigned char Y = i & 0xF0;
-        Y >> 4;
+        unsigned char Y = (i & 0xF0) >> 4;
         return Y;
 }
 
@@ -342,13 +341,23 @@ unsigned char getNN (unsigned short i) {
 }
 
 /*
+ *      Variables for GUI
+ */
+
+int display_width = SCREEN_WIDTH * MODIFIER;
+int display_height = SCREEN_HEIGHT * MODIFIER;
+typedef unsigned char u8;
+u8 screenData [SCREEN_HEIGHT] [SCREEN_WIDTH] [3];
+
+void reshape_window(GLsizei w, GLsizei h);
+void runCycle();
+void setInput();
+
+/*
  *
  *      Methods to help set up the graphics
  *
  */
-
-void runCycle();
-void setInput();
 
 void initTexture() {
         // Clear screen
@@ -448,48 +457,48 @@ void keyboardDown(unsigned char k, int x, int y)
         if(k == 27)    // esc
                 exit(0);
 
-        if(k == '1')  key[0x1] = 1;
-        if(k == '2')  key[0x2] = 1;
-        if(k == '3')  key[0x3] = 1;
-        if(k == '4')  key[0xC] = 1;
+        else if(k == '1')  key[0x1] = 1;
+        else if(k == '2')  key[0x2] = 1;
+        else if(k == '3')  key[0x3] = 1;
+        else if(k == '4')  key[0xC] = 1;
 
-        if(k == 'q')  key[0x4] = 1;
-        if(k == 'w')  key[0x5] = 1;
-        if(k == 'e')  key[0x6] = 1;
-        if(k == 'r')  key[0xD] = 1;
+        else if(k == 'q')  key[0x4] = 1;
+        else if(k == 'w')  key[0x5] = 1;
+        else if(k == 'e')  key[0x6] = 1;
+        else if(k == 'r')  key[0xD] = 1;
 
-        if(k == 'a')  key[0x7] = 1;
-        if(k == 's')  key[0x8] = 1;
-        if(k == 'd')  key[0x9] = 1;
-        if(k == 'f')  key[0xE] = 1;
+        else if(k == 'a')  key[0x7] = 1;
+        else if(k == 's')  key[0x8] = 1;
+        else if(k == 'd')  key[0x9] = 1;
+        else if(k == 'f')  key[0xE] = 1;
 
-        if(k == 'z')  key[0xA] = 1;
-        if(k == 'x')  key[0x0] = 1;
-        if(k == 'c')  key[0xB] = 1;
-        if(k == 'v')  key[0xF] = 1;
+        else if(k == 'z')  key[0xA] = 1;
+        else if(k == 'x')  key[0x0] = 1;
+        else if(k == 'c')  key[0xB] = 1;
+        else if(k == 'v')  key[0xF] = 1;
 }
 
 void keyboardUp(unsigned char k, int x, int y)
 {
         if(k == '1')  key[0x1] = 0;
-        if(k == '2')  key[0x2] = 0;
-        if(k == '3')  key[0x3] = 0;
-        if(k == '4')  key[0xC] = 0;
+        else if(k == '2')  key[0x2] = 0;
+        else if(k == '3')  key[0x3] = 0;
+        else if(k == '4')  key[0xC] = 0;
 
-        if(k == 'q')  key[0x4] = 0;
-        if(k == 'w')  key[0x5] = 0;
-        if(k == 'e')  key[0x6] = 0;
-        if(k == 'r')  key[0xD] = 0;
+        else if(k == 'q')  key[0x4] = 0;
+        else if(k == 'w')  key[0x5] = 0;
+        else if(k == 'e')  key[0x6] = 0;
+        else if(k == 'r')  key[0xD] = 0;
 
-        if(k == 'a')  key[0x7] = 0;
-        if(k == 's')  key[0x8] = 0;
-        if(k == 'd')  key[0x9] = 0;
-        if(k == 'f')  key[0xE] = 0;
+        else if(k == 'a')  key[0x7] = 0;
+        else if(k == 's')  key[0x8] = 0;
+        else if(k == 'd')  key[0x9] = 0;
+        else if(k == 'f')  key[0xE] = 0;
 
-        if(k == 'z')  key[0xA] = 0;
-        if(k == 'x')  key[0x0] = 0;
-        if(k == 'c')  key[0xB] = 0;
-        if(k == 'v')  key[0xF] = 0;
+        else if(k == 'z')  key[0xA] = 0;
+        else if(k == 'x')  key[0x0] = 0;
+        else if(k == 'c')  key[0xB] = 0;
+        else if(k == 'v')  key[0xF] = 0;
 }
 
 
@@ -588,6 +597,7 @@ void runCycle() {
                 --delay_timer;
 }
 
+// Text based display for debugging purposes
 void debugDisplay() {
         for(int y = 0; y < 32; ++y)
         {
@@ -623,7 +633,7 @@ int main(int argc, char *argv[]) {
         glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
 
         glutInitWindowSize(display_width, display_height);
-        glutInitWindowPosition(320, 320);
+        glutInitWindowPosition(0, 0);
         glutCreateWindow("CCHIP-8");
 
         glutDisplayFunc(drawScreen);

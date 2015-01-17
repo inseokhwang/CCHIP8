@@ -228,11 +228,11 @@ void fpD (unsigned short i) {
         for (char y = 0; y < N; ++y) {
                 pixel = mem[I + y];
                 for (char x = 0; x < 8; ++x) {
-                        if (X + x == 64)
-                                X -= x;
-                        if (Y + y == 32)
-                                Y -= y;
                         int pixelIndex = X + x + 64*(Y + y);
+                        if (X + x >= 64)
+                                pixelIndex -= 64;
+                        if (Y + y >= 32)
+                                pixelIndex -= 64*32;
                         if (pixel & (0x80 >> x)) {
                                 if (gfx[pixelIndex]) {
                                         reg[0xF] = 1;

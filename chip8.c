@@ -233,6 +233,10 @@ void fpD (unsigned short i) {
                                 pixelIndex -= 64;
                         if (Y + y >= 32)
                                 pixelIndex -= 64*32;
+                        if (X + x < 0)
+                                pixelIndex += 64;
+                        if (Y + y < 0)
+                                pixelIndex += 64*32;
                         if (pixel & (0x80 >> x)) {
                                 if (gfx[pixelIndex]) {
                                         reg[0xF] = 1;

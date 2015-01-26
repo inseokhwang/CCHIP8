@@ -80,7 +80,10 @@ void fp0 (unsigned short i) {
                                         gfx[x + 64*y] = 0;
                                 }
                         }
+                        #ifdef DRAWWITHREFRESH
+                        #else
                         drawFlag = 1;
+                        #endif
                         break;
                 // Return from subroutine
                 case 0x0EE:
@@ -245,7 +248,10 @@ void fpD (unsigned short i) {
                         }
                 }
         }
+        #ifdef DRAWWITHREFRESH
+        #else
         drawFlag = 1;
+        #endif
 }
 
 /* 
@@ -321,7 +327,7 @@ void fpF (unsigned short i) {
                         I = I + X + 1;
                         break;
                 case 0x65:
-                        for (int z = 0; i <= X; i++) {
+                        for (int z = 0; z <= X; z++) {
                                 reg[z] = mem[I + z];
                         }
                         I = I + X + 1;
